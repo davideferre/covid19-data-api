@@ -8,33 +8,33 @@ _INFLUXDB_DBNAME = 'dati'
 
 app = Flask(__name__)
 
-@app.route('/api/v1/data/nation')
+@app.route('/api/v1/data/nations')
 def nation():
     date_from = request.args.get('from', default=None)
     date_to = request.args.get('to', default=None)
     return _get_data('nation', date_from, date_to)
 
 
-@app.route('/api/v1/data/region')
+@app.route('/api/v1/data/regions')
 def region():
-    codice_regione = request.args.get('regione', default=None)
-    if codice_regione is None:
-        return jsonify({'error': "'regione' is required field"}), 400
-    filters=[{'codice_regione': codice_regione}]
+    region_code = request.args.get('region', default=None)
+    if region_code is None:
+        return jsonify({'error': "'region' is required field"}), 400
+    filters=[{'codice_regione': region_code}]
     date_from = request.args.get('from', default=None)
     date_to = request.args.get('to', default=None)
     return _get_data('region', date_from, date_to, filters)
 
 
-@app.route('/api/v1/data/province')
+@app.route('/api/v1/data/provinces')
 def province():
-    codice_regione = request.args.get('regione', default=None)
-    sigla_provincia = request.args.get('provincia', default=None)
-    if codice_regione is None and sigla_provincia is None:
+    region_code = request.args.get('region', default=None)
+    province_abbr = request.args.get('province', default=None)
+    if region_code is None and province_abbr is None:
         return jsonify({'error': "'regione' or 'provincia' are required fields"}), 400
     filters = [
-        {'codice_regione': codice_regione},
-        {'sigla_provincia': sigla_provincia},
+        {'codice_regione': region_code},
+        {'codice_provincia': province_abbr},
     ]
     date_from = request.args.get('from', default=None)
     date_to = request.args.get('to', default=None)
@@ -42,24 +42,35 @@ def province():
 
 
 def _get_data(measurement, date_from=None, date_to=None, filters=None):
-    query = "SELECT * FROM " + measurement + " WHERE 1=1"
+    query = ("SELECT * FROM %s WHERE 1=1") % (measurement)
+    params = {}
     if date_from is not None:
         date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
-        query += " AND time >= '" + date_from_obj.isoformat() + "Z'"
+        query += " AND time >= $date_from"
+        params['date_from'] = "'" + date_from_obj.isoformat() + "Z'"
     if date_to is not None:
         date_to_obj = datetime.strptime(date_to, '%Y-%m-%d')
         date_to_obj = date_to_obj + timedelta(days=1)
-        query += " AND time < '" + date_to_obj.isoformat() + "Z'"
-    for filter in filters:
-        for key in filter.keys():
-            if filter[key] is not None:
-                query += " AND " + key + " = '" + filter[key] + "'"
+        query += " AND time < $date_to"
+        params['date_to'] = "'" + date_to_obj.isoformat() + "Z'"
+    if filters is not None:
+        for filter in filters:
+            for key in filter.keys():
+                if filter[key] is not None:
+                    query += " AND " + key +" = $" + key
+                    params[key] = filter[key]
     query +=" ORDER BY time DESC"
     client = InfluxDBClient(host=_INFLUXDB_HOST, port=_INFLUXDB_PORT)
     client.switch_database(_INFLUXDB_DBNAME)
-    nation_datas = client.query(query).get_points()
+    influx_datas = client.query(query, bind_params=params).get_points()
     client.close()
     result = []
-    for data in nation_datas:
+    for data in influx_datas:
+        data['id'] = str(data['time'])
+        if measurement != 'nation':
+            data['id'] += '-' + str(data['codice_regione'])
+        if measurement == 'province':
+            data['id'] += '-' + str(data['codice_provincia'])
         result.append(data)
+    result = {measurement + 's': result}
     return jsonify(result)
