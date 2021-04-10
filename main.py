@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from influxdb import InfluxDBClient
 
 _INFLUXDB_HOST = '127.0.0.1'
@@ -7,6 +8,7 @@ _INFLUXDB_PORT = 8086
 _INFLUXDB_DBNAME = 'dati'
 
 app = Flask(__name__)
+CORS(app)
 
 @app.route('/api/v1/data/nations')
 def nation():
@@ -59,7 +61,7 @@ def _get_data(measurement, date_from=None, date_to=None, filters=None):
                 if filter[key] is not None:
                     query += " AND " + key +" = $" + key
                     params[key] = filter[key]
-    query +=" ORDER BY time DESC"
+    query +=" ORDER BY time ASC"
     client = InfluxDBClient(host=_INFLUXDB_HOST, port=_INFLUXDB_PORT)
     client.switch_database(_INFLUXDB_DBNAME)
     influx_datas = client.query(query, bind_params=params).get_points()
