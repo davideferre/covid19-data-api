@@ -48,13 +48,11 @@ def _get_data(measurement, date_from=None, date_to=None, filters=None):
     params = {}
     if date_from is not None:
         date_from_obj = datetime.strptime(date_from, '%Y-%m-%d')
-        query += " AND time >= $date_from"
-        params['date_from'] = "'" + date_from_obj.isoformat() + "Z'"
+        query += " AND time >= '" + date_from_obj.isoformat() + "Z'"
     if date_to is not None:
         date_to_obj = datetime.strptime(date_to, '%Y-%m-%d')
         date_to_obj = date_to_obj + timedelta(days=1)
-        query += " AND time < $date_to"
-        params['date_to'] = "'" + date_to_obj.isoformat() + "Z'"
+        query += " AND time < '" + date_to_obj.isoformat() + "Z'"
     if filters is not None:
         for filter in filters:
             for key in filter.keys():
